@@ -13,6 +13,7 @@ use Illuminate\Database\Concerns\BuildsQueries;
 use Illuminate\Database\Concerns\ExplainsQueries;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Grammars\Grammar;
 use Illuminate\Database\Query\Processors\Processor;
@@ -508,7 +509,7 @@ class Builder implements BuilderContract
     /**
      * Add a join clause to the query.
      *
-     * @param  \Illuminate\Contracts\Database\Query\Expression|string  $table
+     * @param  \Illuminate\Contracts\Database\Query\Expression|string|Model  $table
      * @param  \Closure|string  $first
      * @param  string|null  $operator
      * @param  string|null  $second
@@ -518,7 +519,16 @@ class Builder implements BuilderContract
      */
     public function join($table, $first, $operator = null, $second = null, $type = 'inner', $where = false)
     {
-        $join = $this->newJoinClause($this, $type, $table);
+        //If the provided table is actually an eloquent model, get the table name and soft-delete field from the corresponding model.
+        if (is_string($table) && class_exists($table)) {
+            $model = new $table;
+            $table = $model->getTable();
+            $softDeleteField = $model->getQualifiedDeletedAtColumn();
+        } else {
+            $softDeleteField = null;
+        }
+
+        $join = $this->newJoinClause($this, $type, $table, $softDeleteField);
 
         // If the first "column" of the join is really a Closure instance the developer
         // is trying to build a join with a complex "on" clause containing more than
@@ -719,9 +729,9 @@ class Builder implements BuilderContract
      * @param  string  $table
      * @return \Illuminate\Database\Query\JoinClause
      */
-    protected function newJoinClause(self $parentQuery, $type, $table)
+    protected function newJoinClause(self $parentQuery, $type, $table, $softDeleteField = null)
     {
-        return new JoinClause($parentQuery, $type, $table);
+        return new JoinClause($parentQuery, $type, $table, $softDeleteField);
     }
 
     /**
